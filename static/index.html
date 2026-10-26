@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOCX Local RAG Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- FontAwesome icons & Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <div class="app-layout">
+        <!-- Sidebar: Configuration & Document Status -->
+        <aside class="sidebar">
+            <div class="brand-section">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                </div>
+                <div>
+                    <h2>DOCX RAG</h2>
+                    <span class="sub-badge">Local LLM Powered</span>
+                </div>
+            </div>
+
+            <!-- Model Settings Card -->
+            <div class="card config-card">
+                <h3>Local LLM Backend</h3>
+                <div class="form-group">
+                    <label for="providerSelect">Provider</label>
+                    <select id="providerSelect" class="dark-input">
+                        <option value="ollama">Ollama (Default)</option>
+                        <option value="openai_compatible">LM Studio / vLLM (OpenAI API)</option>
+                        <option value="offline">Offline / Demo Mode</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="urlGroup">
+                    <label for="baseUrlInput">Base URL</label>
+                    <input type="text" id="baseUrlInput" class="dark-input" value="http://127.0.0.1:11434">
+                </div>
+
+                <div class="form-group" id="modelGroup">
+                    <div class="label-row">
+                        <label for="modelInput">Model Name</label>
+                        <button type="button" id="refreshModelsBtn" class="text-btn" title="Detect installed models">Detect</button>
+                    </div>
+                    <input type="text" id="modelInput" class="dark-input" list="modelDatalist" value="llama3" placeholder="e.g. llama3, mistral, deepseek-r1">
+                    <datalist id="modelDatalist"></datalist>
+                </div>
+
+                <div class="status-indicator-bar" id="connectionStatus">
+                    <span class="status-dot unknown"></span>
+                    <span class="status-text">Ready</span>
+                </div>
+
+                <div class="collapsible-section">
+                    <button type="button" class="collapse-toggle" id="toggleAdvancedBtn">
+                        <span>Advanced RAG Settings</span>
+                        <span class="arrow">▾</span>
+                    </button>
+                    <div class="advanced-panel" id="advancedPanel">
+                        <div class="form-group">
+                            <label for="topKInput">Top-K Chunks: <span id="topKVal">6</span></label>
+                            <input type="range" id="topKInput" min="1" max="10" value="6" class="dark-slider">
+                        </div>
+                        <div class="form-group">
+                            <label for="tempInput">Temperature: <span id="tempVal">0.2</span></label>
+                            <input type="range" id="tempInput" min="0" max="1" step="0.05" value="0.2" class="dark-slider">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Document Card -->
+            <div class="card doc-card" id="docCard" style="display: none;">
+                <div class="card-header">
+                    <h3>Active Document</h3>
+                    <button id="resetDocBtn" class="icon-btn danger" title="Clear document">✕</button>
+                </div>
+                <div class="doc-meta">
+                    <div class="doc-icon">📄</div>
+                    <div class="doc-details">
+                        <p class="doc-name" id="docName">document.docx</p>
+                        <p class="doc-sub" id="docStats">0 chunks • 0 words</p>
+                    </div>
+                </div>
+                <button type="button" id="inspectChunksBtn" class="secondary-btn">Inspect Chunks</button>
+            </div>
+
+            <div class="sidebar-footer">
+                <p>Grounding: <strong>Strict Context Only</strong></p>
+                <p class="zero-hallucination">Hallucination Prevention Active</p>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-status">
+                    <h1 id="headerTitle">Document Q&A Assistant</h1>
+                </div>
+                <div class="header-actions">
+                    <button id="themeToggleBtn" class="pill-btn" title="Toggle UI Accent">Dark Obsidian</button>
+                </div>
+            </header>
+
+            <!-- Upload Area View (Shown when no doc is loaded) -->
+            <div class="upload-view" id="uploadView">
+                <div class="upload-box" id="dropZone">
+                    <div class="upload-icon-circle">
+                        <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h2>Upload your DOCX document</h2>
+                    <p class="upload-sub">Drag & drop your <code>.docx</code> file here, or click to browse</p>
+                    <input type="file" id="fileInput" accept=".docx" hidden>
+                    <button type="button" class="primary-btn" id="browseBtn">Select .docx File</button>
+
+                    <div class="constraints-box">
+                        <h4>Strict RAG Processing Pipeline:</h4>
+                        <ul>
+                            <li><strong>Format:</strong> Microsoft Word (<code>.docx</code>)</li>
+                            <li><strong>Chunking:</strong> Sliding semantic window with 100-character overlap</li>
+                            <li><strong>Vectorization:</strong> Sublinear TF-IDF / In-memory cosine similarity</li>
+                            <li><strong>Grounding:</strong> LLM strictly answers from context; no hallucinations</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Area View (Shown when document is uploaded) -->
+            <div class="chat-view" id="chatView" style="display: none;">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message assistant-msg system-banner">
+                        <div class="msg-bubble">
+                            <p><strong>Document loaded successfully!</strong> Ask any question regarding the document contents. The model will strictly retrieve context chunks before generating answers.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input Section -->
+                <div class="chat-input-bar">
+                    <form id="chatForm" class="input-form">
+                        <textarea 
+                            id="queryInput" 
+                            rows="1" 
+                            placeholder="Ask a question about the document... (Press Enter to send)"
+                            required
+                        ></textarea>
+                        <button type="submit" id="sendBtn" class="send-btn" title="Send question">
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </form>
+                    <p class="input-hint">Answers are strictly grounded in document context. Citations reflect matched chunks.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Chunks Modal -->
+    <div class="modal-overlay" id="chunksModal" style="display: none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Document Chunks Index</h3>
+                <button type="button" class="icon-btn" id="closeModalBtn">✕</button>
+            </div>
+            <div class="modal-body" id="modalChunksList">
+                <!-- Dynamically populated chunks -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
